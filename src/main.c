@@ -219,6 +219,9 @@ int getWindowSize(int *rows, int *cols)
 
 // row operations
 
+/// @brief Creates a new row (the erow struct) and appends it to the editor's row array.
+/// @param s The string to be added as a new row.
+/// @param len The length of the string.
 void editorAppendRow(char *s, size_t len)
 {
     E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
@@ -401,6 +404,8 @@ void editorRefreshScreen()
 
 void editorMoveCursor(int key)
 {
+    erow *row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+
     switch (key)
     {
     case ARROW_LEFT:
@@ -408,9 +413,23 @@ void editorMoveCursor(int key)
         {
             E.cx--;
         }
+        else if (E.cy > 0)
+        {
+            // Returns to the end of the previous line.
+            E.cy--;
+            E.cx = E.row[E.cy].size;
+        }
         break;
     case ARROW_RIGHT:
-        E.cx++;
+        if (row && E.cx < row->size)
+        {
+            E.cx++;
+        }
+        else if (row && E.cx == row->size)
+        {
+            E.cy++;
+            E.cx = 0;
+        }
         break;
     case ARROW_UP:
         if (E.cy != 0)
@@ -424,6 +443,15 @@ void editorMoveCursor(int key)
             E.cy++;
         }
         break;
+    }
+
+    // Garantees that, even if the current line is shorter than the previous one,
+    // the cursor will be positioned at the end of the line.
+    row = (E.cy >= E.numrows) ? NULL : &E.row[E.cy];
+    int rowlen = row ? row->size : 0;
+    if (E.cx > rowlen)
+    {
+        E.cx = rowlen;
     }
 }
 
