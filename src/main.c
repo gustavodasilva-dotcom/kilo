@@ -21,6 +21,7 @@
 
 enum editorKey
 {
+    BACKSPACE = 127,
     ARROW_LEFT = 1000,
     ARROW_RIGHT,
     ARROW_UP,
@@ -304,7 +305,39 @@ void editorAppendRow(char *s, size_t len)
     E.numrows++;
 }
 
+void editorRowInsertChar(erow *row, int at, int c)
+{
+    if (at < 0 || at > row->size)
+        at = row->size;
+
+    // Sum 2 -- one for the new character and one for the null byte (\0).
+    row->chars = realloc(row->chars, row->size + 2);
+
+    memmove(&row->chars[at + 1], &row->chars[at], row->size - at + 1);
+
+    row->size++;
+    row->chars[at] = c;
+
+    editorUpdateRow(row);
+}
+
 // row operations
+
+// editor operations
+
+void editorInsertChar(int c)
+{
+    // Add a new line, with no content in it, if the maximum number of rows is reached.
+    if (E.cy == E.numrows)
+        editorAppendRow("", 0);
+
+    editorRowInsertChar(&E.row[E.cy], E.cx, c);
+
+    // Advance the cursor so the next typed character goes after the newly inserted one.
+    E.cx++;
+}
+
+// editor operations
 
 // file i/o
 
@@ -589,6 +622,9 @@ void editorProcessKeypress()
 
     switch (c)
     {
+    case '\r': // The 'Enter' key
+        // TODO
+        break;
     case CTRL_KEY('q'):
         write(STDOUT_FILENO, "\x1b[2J", 4);
         write(STDOUT_FILENO, "\x1b[H", 3);
@@ -602,6 +638,12 @@ void editorProcessKeypress()
     case END_KEY:
         if (E.cy < E.numrows)
             E.cx = E.row[E.cy].size;
+        break;
+
+    case BACKSPACE:
+    case CTRL_KEY('h'):
+    case DEL_KEY:
+        // TODO
         break;
 
     case PAGE_UP:
@@ -629,6 +671,14 @@ void editorProcessKeypress()
     case ARROW_LEFT:
     case ARROW_RIGHT:
         editorMoveCursor(c);
+        break;
+
+    case CTRL_KEY('l'):
+    case '\x1b':
+        break;
+
+    default:
+        editorInsertChar(c);
         break;
     }
 }
