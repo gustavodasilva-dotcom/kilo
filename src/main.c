@@ -17,8 +17,9 @@
 
 #define KILO_VERSION "0.0.1"
 #define KILO_TAB_STOP 8
+#define KILO_QUIT_TIMES 3
 
-#define CTRL_KEY(k) ((k) &0x1f)
+#define CTRL_KEY(k) ((k) & 0x1f)
 
 enum editorKey {
     BACKSPACE = 127,
@@ -376,8 +377,7 @@ struct abuf {
     int len;
 };
 
-#define ABUF_INIT                                                                                  \
-    { NULL, 0 }
+#define ABUF_INIT {NULL, 0}
 
 void abAppend(struct abuf *ab, const char *s, int len) {
     char *new = realloc(ab->b, ab->len + len);
@@ -578,6 +578,8 @@ void editorMoveCursor(int key) {
 }
 
 void editorProcessKeypress() {
+    static int quit_times = KILO_QUIT_TIMES;
+
     int c = editorReadKey();
 
     switch (c) {
@@ -586,6 +588,13 @@ void editorProcessKeypress() {
             break;
 
         case CTRL_KEY('q'):
+            if (E.dirty && quit_times > 0) {
+                editorSetStatusMessage(
+                    "WARNING! File has unsaved changes. Press Ctrl-Q %d more times to quit.",
+                    quit_times);
+                quit_times--;
+                return;
+            }
             write(STDOUT_FILENO, "\x1b[2J", 4);
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
@@ -638,6 +647,9 @@ void editorProcessKeypress() {
             editorInsertChar(c);
             break;
     }
+
+    // Reset the variable if another key (other than Ctrl-Q) is pressed.
+    quit_times = KILO_QUIT_TIMES;
 }
 
 // input
