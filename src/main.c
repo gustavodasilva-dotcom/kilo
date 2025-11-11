@@ -265,6 +265,27 @@ void editorAppendRow(char *s, size_t len) {
     E.dirty++;
 }
 
+/// @brief Frees the memory allocated for a row (the erow struct).
+/// @param row The row to be freed.
+void editorFreeRow(erow *row) {
+    free(row->render);
+    free(row->chars);
+}
+
+/// @brief Deletes a row at a specific index in the editor's row array.
+/// @param at The index of the row to be deleted.
+void editorDelRow(int at) {
+    if (at < 0 || at >= E.numrows) return;
+
+    editorFreeRow(&E.row[at]);
+
+    // Override the deleted row with the rest of them.
+    memmove(&E.row[at], &E.row[at + 1], sizeof(erow) * (E.numrows - at - 1));
+
+    E.numrows--;
+    E.dirty++;
+}
+
 /// @brief Adds a character at a specific position in a row (the erow struct).
 /// @param row The row where the character will be inserted.
 /// @param at The position where the character will be inserted.
@@ -279,6 +300,25 @@ void editorRowInsertChar(erow *row, int at, int c) {
 
     row->size++;
     row->chars[at] = c;
+
+    editorUpdateRow(row);
+
+    E.dirty++;
+}
+
+/// @brief Appends a string at the end of a row (the erow struct).
+/// @param row The row where the string will be appended.
+/// @param s The string to be appended.
+/// @param len The length of the string.
+void editorRowAppendString(erow *row, char *s, size_t len) {
+    // Updates the size of the target row (also add 1 for the null byte).
+    row->chars = realloc(row->chars, row->size + len + 1);
+
+    // Copies the contents of the deleted row into the target one.
+    memcpy(&row->chars[row->size], s, len);
+
+    row->size += len;
+    row->chars[row->size] = '\0';
 
     editorUpdateRow(row);
 
@@ -318,7 +358,9 @@ void editorInsertChar(int c) {
 
 void editorDelChar() {
     if (E.cy == E.numrows) return;
+    if (E.cx == 0 && E.cy == 0) return;
 
+    // The row to be updated (or deleted).
     erow *row = &E.row[E.cy];
     // Checks if there's a character to the left.
     if (E.cx > 0) {
@@ -326,6 +368,16 @@ void editorDelChar() {
         editorRowDelChar(row, E.cx - 1);
         // Move the cursor back by one.
         E.cx--;
+    } else {
+        // Positions the cursor at the end of the previous line (i.e., the beginning of the
+        // soon-to-be-deleted current one).
+        E.cx = E.row[E.cy - 1].size;
+
+        editorRowAppendString(&E.row[E.cy - 1], row->chars, row->size);
+        editorDelRow(E.cy);
+
+        // Removes the line.
+        E.cy--;
     }
 }
 
@@ -720,6 +772,7 @@ int main(int argc, char *argv[]) {
 
     editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit");
 
+    // The main loop that renders the characters and handles key presses.
     while (1) {
         editorRefreshScreen();
         editorProcessKeypress();
