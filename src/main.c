@@ -19,7 +19,7 @@
 #define KILO_TAB_STOP 8
 #define KILO_QUIT_TIMES 3
 
-#define CTRL_KEY(k) ((k) & 0x1f)
+#define CTRL_KEY(k) ((k) &0x1f)
 
 enum editorKey {
     BACKSPACE = 127,
@@ -265,6 +265,10 @@ void editorAppendRow(char *s, size_t len) {
     E.dirty++;
 }
 
+/// @brief Adds a character at a specific position in a row (the erow struct).
+/// @param row The row where the character will be inserted.
+/// @param at The position where the character will be inserted.
+/// @param c The character to be inserted.
 void editorRowInsertChar(erow *row, int at, int c) {
     if (at < 0 || at > row->size) at = row->size;
 
@@ -275,6 +279,23 @@ void editorRowInsertChar(erow *row, int at, int c) {
 
     row->size++;
     row->chars[at] = c;
+
+    editorUpdateRow(row);
+
+    E.dirty++;
+}
+
+/// @brief Removes a character at a specific position in a row (the erow struct).
+/// @param row The row where the character will be deleted.
+/// @param at The position of the character to be deleted.
+void editorRowDelChar(erow *row, int at) {
+    if (at < 0 || at >= row->size) return;
+
+    // Overrides the deleted character with the ones that come after it (the null byte,
+    // at the end of the chars vector, gets included).
+    memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+
+    row->size--;
 
     editorUpdateRow(row);
 
@@ -293,6 +314,19 @@ void editorInsertChar(int c) {
 
     // Advance the cursor so the next typed character goes after the newly inserted one.
     E.cx++;
+}
+
+void editorDelChar() {
+    if (E.cy == E.numrows) return;
+
+    erow *row = &E.row[E.cy];
+    // Checks if there's a character to the left.
+    if (E.cx > 0) {
+        // Delete the character to the left.
+        editorRowDelChar(row, E.cx - 1);
+        // Move the cursor back by one.
+        E.cx--;
+    }
 }
 
 // editor operations
@@ -377,7 +411,8 @@ struct abuf {
     int len;
 };
 
-#define ABUF_INIT {NULL, 0}
+#define ABUF_INIT                                                                                  \
+    { NULL, 0 }
 
 void abAppend(struct abuf *ab, const char *s, int len) {
     char *new = realloc(ab->b, ab->len + len);
@@ -615,7 +650,10 @@ void editorProcessKeypress() {
         case BACKSPACE:
         case CTRL_KEY('h'):
         case DEL_KEY:
-            // TODO
+            // If the 'Delete' key is pressed, move the cursor to the right by one and
+            // then remove the character, emulating the behavior of the 'Backspace' key.
+            if (c == DEL_KEY) editorMoveCursor(ARROW_RIGHT);
+            editorDelChar();
             break;
 
         case PAGE_UP:
