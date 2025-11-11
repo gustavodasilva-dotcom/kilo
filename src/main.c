@@ -244,12 +244,16 @@ void editorUpdateRow(erow *row) {
 }
 
 /// @brief Creates a new row (the erow struct) and appends it to the editor's row array.
+/// @param at The vertical index where the new row will be inserted.
 /// @param s The string to be added as a new row.
 /// @param len The length of the string.
-void editorAppendRow(char *s, size_t len) {
-    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+void editorInsertRow(int at, char *s, size_t len) {
+    if (at < 0 || at > E.numrows) return;
 
-    int at = E.numrows;
+    E.row = realloc(E.row, sizeof(erow) * (E.numrows + 1));
+    // Allocates space in the rows vector for the new line.
+    memmove(&E.row[at + 1], &E.row[at], sizeof(erow) * (E.numrows - at));
+
     E.row[at].size = len;
     E.row[at].chars = malloc(len + 1);
 
@@ -348,12 +352,38 @@ void editorRowDelChar(erow *row, int at) {
 
 void editorInsertChar(int c) {
     // Add a new line, with no content in it, if the maximum number of rows is reached.
-    if (E.cy == E.numrows) editorAppendRow("", 0);
+    if (E.cy == E.numrows) editorInsertRow(E.numrows, "", 0);
 
     editorRowInsertChar(&E.row[E.cy], E.cx, c);
 
     // Advance the cursor so the next typed character goes after the newly inserted one.
     E.cx++;
+}
+
+void editorInsertNewLine() {
+    if (E.cx == 0) {
+        // Adds a new line before the line we are on. The effect is the same as if it were
+        // added below.
+        editorInsertRow(E.cy, "", 0);
+    } else {
+        erow *row = &E.row[E.cy];
+
+        // Splits the current line by inserting a new row below with the characters to the
+        // right of the current row.
+        editorInsertRow(E.cy + 1, &row->chars[E.cx], row->size - E.cx);
+
+        // Reassigns the current row so the pointer is validated.
+        row = &E.row[E.cy];
+        // Truncates the row with the cursor's position.
+        row->size = E.cx;
+        row->chars[row->size] = '\0';
+
+        // Renders the contents of the (current) updated row.
+        editorUpdateRow(row);
+    }
+
+    E.cy++;
+    E.cx = 0;
 }
 
 void editorDelChar() {
@@ -420,7 +450,7 @@ void editorOpen(char *filename) {
         while (linelen > 0 && (line[linelen - 1] == '\n' || line[linelen - 1] == '\r'))
             linelen--;
 
-        editorAppendRow(line, linelen);
+        editorInsertRow(E.numrows, line, linelen);
     }
 
     free(line);
@@ -671,7 +701,7 @@ void editorProcessKeypress() {
 
     switch (c) {
         case '\r': // The 'Enter' key
-            // TODO
+            editorInsertNewLine();
             break;
 
         case CTRL_KEY('q'):
