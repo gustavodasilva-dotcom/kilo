@@ -218,6 +218,25 @@ int editorRowCxToRx(erow *row, int cx) {
     return rx;
 }
 
+/// @brief Converts the render index (rx) to the character index (cx) in a given row,
+/// taking into account special characters like tabs.
+/// @param row The row to be processed.
+/// @param rx The render index.
+/// @return The character index.
+int editorRowRxToCx(erow *row, int rx) {
+    int cur_rx = 0;
+    int cx;
+    for (cx = 0; cx < row->size; cx++) {
+        if (row->chars[cx] == '\t') cur_rx += (KILO_TAB_STOP - 1) - (cur_rx % KILO_TAB_STOP);
+        cur_rx++;
+
+        // Stops when it reaches the given render row horizontal position.
+        if (cur_rx > rx) return cx;
+    }
+
+    return cx;
+}
+
 /// @brief Renders special characters in a row.
 /// @param row The row to be updated.
 void editorUpdateRow(erow *row) {
@@ -493,6 +512,35 @@ void editorSave() {
 }
 
 // file i/o
+
+// find
+
+void editorFind() {
+    char *query = editorPrompt("Search: %s (ESC to cancel)");
+    if (query == NULL) return;
+
+    int i;
+    for (i = 0; i < E.numrows; i++) {
+        erow *row = &E.row[i];
+        // Finds the pointer to the matching substring.
+        char *match = strstr(row->render, query);
+        if (match) {
+            E.cy = i;
+            // Subtracts the pointers to get the matched term's horizontal position (this is
+            // possible since the 'match' variable is a pointer of 'row->render').
+            E.cx = editorRowRxToCx(row, match - row->render);
+            // Scrolls to the bottom of the screen, which will cause the screen to scroll upwards in
+            // the following refresh. The consequence is that the matched line is going to be at the
+            // top of the screen.
+            E.rowoff = E.numrows;
+            break;
+        }
+    }
+
+    free(query);
+}
+
+// find
 
 // append buffer
 
@@ -779,6 +827,10 @@ void editorProcessKeypress() {
             if (E.cy < E.numrows) E.cx = E.row[E.cy].size;
             break;
 
+        case CTRL_KEY('f'):
+            editorFind();
+            break;
+
         case BACKSPACE:
         case CTRL_KEY('h'):
         case DEL_KEY:
@@ -850,7 +902,7 @@ int main(int argc, char *argv[]) {
         editorOpen(argv[1]);
     }
 
-    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit");
+    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
 
     // The main loop that renders the characters and handles key presses.
     while (1) {
