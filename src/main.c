@@ -516,15 +516,43 @@ void editorSave() {
 // find
 
 void editorFindCallback(char *query, int key) {
-    if (key == '\n' || key == '\x1b') return;
+    // Stores the position of the row of the last match (or -1 if there wasn't a match).
+    static int last_match = -1;
+    // Stores the direction of the match (1 for forwards and -1 for backwards).
+    static int direction = 1;
+
+    if (key == '\r' || key == '\x1b') {
+        last_match = -1;
+        direction = 1;
+        return;
+    } else if (key == ARROW_RIGHT || key == ARROW_DOWN) {
+        direction = 1;
+    } else if (key == ARROW_LEFT || key == ARROW_UP) {
+        direction = -1;
+    } else {
+        last_match = -1;
+        direction = 1;
+    }
+
+    if (last_match == -1) direction = 1;
+
+    // Index of the current row being searched.
+    int current = last_match;
 
     int i;
     for (i = 0; i < E.numrows; i++) {
-        erow *row = &E.row[i];
+        current += direction;
+        if (current == -1)
+            current = E.numrows - 1;
+        else if (current == E.numrows)
+            current = 0;
+
+        erow *row = &E.row[current];
         // Finds the pointer to the matching substring.
         char *match = strstr(row->render, query);
         if (match) {
-            E.cy = i;
+            last_match = current;
+            E.cy = current;
             // Subtracts the pointers to get the matched term's horizontal position (this is
             // possible since the 'match' variable is a pointer of 'row->render').
             E.cx = editorRowRxToCx(row, match - row->render);
@@ -543,7 +571,7 @@ void editorFind() {
     int saved_coloff = E.coloff;
     int saved_rowoff = E.rowoff;
 
-    char *query = editorPrompt("Search: %s (ESC to cancel)", editorFindCallback);
+    char *query = editorPrompt("Search: %s (Use ESC/Arrows/Enter)", editorFindCallback);
 
     if (query) {
         free(query);
